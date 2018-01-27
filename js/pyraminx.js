@@ -32,6 +32,7 @@ function positionTetrahedron(tetrahedron) {
   var vertexVector = tetrahedron.geometry.vertices[1].clone();
   var rotationAxis = new THREE.Vector3();
   rotationAxis.crossVectors(vertexVector, y);
+  // align vertices[1] with y
   tetrahedron.rotateOnWorldAxis ( rotationAxis.normalize(), vertexVector.angleTo(y) );
   tetrahedron.position.y += 1 / 3;
   tetrahedron.rotateOnWorldAxis ( y, Math.PI / 12 );
@@ -79,21 +80,6 @@ var ambientLight = new THREE.AmbientLight( 0x404040 ); // soft white light
 scene.add( ambientLight );
 
 
-// arrow helper
-//normalize the direction vector (convert to vector of length 1)
-var origin = new THREE.Vector3( 0, 0, 0 );
-var length = 2;
-var hex = 0xffff00;
-var arrowHelperX = new THREE.ArrowHelper( x, origin, length, 0xffff00 );
-var arrowHelperY = new THREE.ArrowHelper( y, origin, length, 0xff0000 );
-var arrowHelperZ = new THREE.ArrowHelper( z, origin, length, 0x0000ff );
-scene.add( arrowHelperX );
-scene.add( arrowHelperY );
-scene.add( arrowHelperZ );
-
-window.addEventListener("keypress", function(event) {
-})
-
 var raycaster = new THREE.Raycaster();
 var mouse = new THREE.Vector2();
 
@@ -119,8 +105,39 @@ function restaurelastIntersectObj(lastIntersectObj) {
 
 var lastIntersectObj = null;
 // the one close to origin, the one on +x, the one on +z, the one on +y
-var subPyraminx = [[0, 3, 6, 1], [2, 1, 7, 4], [5, 4, 8, 3], [9, 6, 8, 7]];
+var normal1 = new THREE.Vector3(2 / Math.sqrt(6), 1 / 3, 2 / Math.sqrt(18));
+var normal2 = new THREE.Vector3(-2 / Math.sqrt(6), 1 / 3, 2 / Math.sqrt(18));
+var normal3 = new THREE.Vector3(0, 1 / 3, -1);
+var normal4 = new THREE.Vector3(0, -1, 0);
 
+var subPyraminx = [
+  {tetras: [0, 3, 6, 1], normal: normal1.normalize(), point: new THREE.Vector3(0, 0, 0)},// the one close to origin
+  {tetras: [2, 1, 7, 4], normal: normal2.normalize(), point: new THREE.Vector3(12 / Math.sqrt(6), 0, 0)}, //the one on +x
+  {tetras: [5, 4, 8, 3], normal: normal3.normalize(), point: new THREE.Vector3(Math.sqrt(6), 0, 3 * Math.sqrt(2))}, //the one on +z
+  {tetras: [9, 6, 8, 7], normal: normal4.normalize(), point: new THREE.Vector3(Math.sqrt(6), 3 * Math.sqrt(2), Math.sqrt(2))}]; //the one on +y
+
+// arrow helper
+//normalize the direction vector (convert to vector of length 1)
+var origin = new THREE.Vector3( 0, 0, 0 );
+var length = 2;
+var hex = 0xffff00;
+var arrowHelperX = new THREE.ArrowHelper( x, origin, length, 0xffff00 );
+var arrowHelperY = new THREE.ArrowHelper( y, origin, length, 0xff0000 );
+var arrowHelperZ = new THREE.ArrowHelper( z, origin, length, 0x0000ff );
+var arrowHelperV = new THREE.ArrowHelper( normal1, origin, 2, 0x0000ff );
+scene.add( arrowHelperX );
+scene.add( arrowHelperY );
+scene.add( arrowHelperZ );
+scene.add( arrowHelperV );
+
+window.addEventListener("keypress", function(event) {
+  for (pyrIndex of subPyraminx[3].tetras) {
+    // rotate the subPyraminx along the axis defined by the normal and the point 
+    tetrahedrons[pyrIndex].position.sub(subPyraminx[3].point);
+    tetrahedrons[pyrIndex].rotateOnWorldAxis ( subPyraminx[3].normal, Math.PI *2 / 3 );
+    tetrahedrons[pyrIndex].position.add(subPyraminx[3].point);
+  }
+});
 // render
 function animate() {
   // update the picking ray with the camera and mouse position
@@ -129,15 +146,14 @@ function animate() {
 	// calculate objects intersecting the picking ray
 	var intersects = raycaster.intersectObjects( scene.children );
   if (intersects.length > 0) {
-    console.log("intersect index: " + tetraToIndex.get(intersects[ 0 ].object));
     // lower the intersected obj opacity
     for (subPyrIndexList of subPyraminx) {
-      if (subPyrIndexList.includes(tetraToIndex.get(intersects[ 0 ].object))) {
-        for (pyrIndex of subPyrIndexList) {
-          console.log("pyrIndex: " + subPyrIndexList);
+      // iterate over subPyraminx, check if it contains the tetrahedron
+      if (subPyrIndexList.tetras.includes(tetraToIndex.get(intersects[ 0 ].object))) {
+        // if yes, lower the opacity of all tetrahedrons in the subPyraminx
+        for (pyrIndex of subPyrIndexList.tetras) {
           for (j = 0; j < 4; j++) {
       		  tetrahedrons[pyrIndex].material[j].opacity = 0.5;
-            //console.log("intersected index: " + tetraToIndex.get(intersects[ 0 ].object));
           }
         }
       }
