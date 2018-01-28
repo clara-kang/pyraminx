@@ -79,6 +79,17 @@ scene.add( pointLight );
 var ambientLight = new THREE.AmbientLight( 0x404040 ); // soft white light
 scene.add( ambientLight );
 
+// arrow helper
+//normalize the direction vector (convert to vector of length 1)
+var origin = new THREE.Vector3( 0, 0, 0 );
+var length = 2;
+var hex = 0xffff00;
+var arrowHelperX = new THREE.ArrowHelper( x, origin, length, 0xffff00 );
+var arrowHelperY = new THREE.ArrowHelper( y, origin, length, 0xff0000 );
+var arrowHelperZ = new THREE.ArrowHelper( z, origin, length, 0x0000ff );
+scene.add( arrowHelperX );
+scene.add( arrowHelperY );
+scene.add( arrowHelperZ );
 
 var raycaster = new THREE.Raycaster();
 var mouse = new THREE.Vector2();
@@ -116,56 +127,141 @@ var subPyraminx = [
   {tetras: [5, 4, 8, 3], normal: normal3.normalize(), point: new THREE.Vector3(Math.sqrt(6), 0, 3 * Math.sqrt(2))}, //the one on +z
   {tetras: [9, 6, 8, 7], normal: normal4.normalize(), point: new THREE.Vector3(Math.sqrt(6), 3 * Math.sqrt(2), Math.sqrt(2))}]; //the one on +y
 
-// arrow helper
-//normalize the direction vector (convert to vector of length 1)
-var origin = new THREE.Vector3( 0, 0, 0 );
-var length = 2;
-var hex = 0xffff00;
-var arrowHelperX = new THREE.ArrowHelper( x, origin, length, 0xffff00 );
-var arrowHelperY = new THREE.ArrowHelper( y, origin, length, 0xff0000 );
-var arrowHelperZ = new THREE.ArrowHelper( z, origin, length, 0x0000ff );
-var arrowHelperV = new THREE.ArrowHelper( normal1, origin, 2, 0x0000ff );
-scene.add( arrowHelperX );
-scene.add( arrowHelperY );
-scene.add( arrowHelperZ );
-scene.add( arrowHelperV );
-
+var indexToRotate = 3;
+var animating = false;
+var rotationProgress = 0;
 window.addEventListener("keypress", function(event) {
-  for (pyrIndex of subPyraminx[3].tetras) {
-    // rotate the subPyraminx along the axis defined by the normal and the point 
-    tetrahedrons[pyrIndex].position.sub(subPyraminx[3].point);
-    tetrahedrons[pyrIndex].rotateOnWorldAxis ( subPyraminx[3].normal, Math.PI *2 / 3 );
-    tetrahedrons[pyrIndex].position.add(subPyraminx[3].point);
+  switch(event.key) {
+    case "a":
+      indexToRotate = 0;
+      break;
+    case "s":
+      indexToRotate = 1;
+      break;
+    case "d":
+      indexToRotate = 2;
+      break;
+    case "f":
+      indexToRotate = 3;
+      break;
   }
+  animating = true;
+  rotationProgress = 0;
+  // switch (indexToRotate) {
+  //   case 0:
+  //     console.log("0!");
+  //     subPyraminx[2].tetras[3] = subPyraminx[0].tetras[3];
+  //     subPyraminx[3].tetras[1] = subPyraminx[0].tetras[1];
+  //     subPyraminx[1].tetras[1] = subPyraminx[0].tetras[2];
+  //     console.log(subPyraminx[2].tetras);
+  //     break;
+  //   case 1:
+  //     console.log("1!");
+  //     subPyraminx[2].tetras[1] = subPyraminx[1].tetras[1];
+  //     subPyraminx[3].tetras[3] = subPyraminx[1].tetras[3];
+  //     subPyraminx[0].tetras[4] = subPyraminx[1].tetras[2];
+  //     break;
+  //   case 2:
+  //     console.log("2!");
+  //     subPyraminx[1].tetras[3] = subPyraminx[2].tetras[2];
+  //     subPyraminx[0].tetras[1] = subPyraminx[2].tetras[1];
+  //     subPyraminx[3].tetras[2] = subPyraminx[2].tetras[3];
+  //     break;
+  //   case 3:
+  //     console.log("3!");
+  //     subPyraminx[0].tetras[2] = subPyraminx[3].tetras[2];
+  //     subPyraminx[1].tetras[2] = subPyraminx[3].tetras[1];
+  //     subPyraminx[2].tetras[2] = subPyraminx[3].tetras[3];
+  //     break;
+  // }
 });
-// render
-function animate() {
-  // update the picking ray with the camera and mouse position
-	raycaster.setFromCamera( mouse, camera );
 
-	// calculate objects intersecting the picking ray
-	var intersects = raycaster.intersectObjects( scene.children );
-  if (intersects.length > 0) {
-    // lower the intersected obj opacity
-    for (subPyrIndexList of subPyraminx) {
-      // iterate over subPyraminx, check if it contains the tetrahedron
-      if (subPyrIndexList.tetras.includes(tetraToIndex.get(intersects[ 0 ].object))) {
-        // if yes, lower the opacity of all tetrahedrons in the subPyraminx
-        for (pyrIndex of subPyrIndexList.tetras) {
-          for (j = 0; j < 4; j++) {
-      		  tetrahedrons[pyrIndex].material[j].opacity = 0.5;
-          }
-        }
-      }
+var dAngle;
+var angleToRotate = Math.PI * 2 / 3; // amount to rotate subPyraminx per click
+var tetraTriggerIndex = [0, 2, 5, 9]; // the index of tetrahedrons that triggers subPyraminx rotation when clicked on
+var tetraIndex = -1; // intersected tetrahedron index in tetrahedrons array
+
+window.addEventListener("click", function( event ) {
+  if (animating == false && tetraIndex != -1) {
+    switch (tetraIndex) {
+      case 0:
+        indexToRotate = 0;
+        break;
+      case 2:
+        indexToRotate = 1;
+        break;
+      case 5:
+        indexToRotate = 2;
+        break;
+      case 9:
+        indexToRotate = 3;
+        break;
     }
-  } else {
+    // restaure opacity for rotating
     for (i = 0; i < 10; i++) {
       for (j = 0; j < 4; j++) {
         tetrahedrons[i].material[j].opacity = 1;
-        //console.log("intersected index: " + tetraToIndex.get(intersects[ 0 ].object));
       }
     }
+    animating = true;
+    rotationProgress = 0;
   }
+});
+
+// render
+function animate() {
+  // if subPyraminx rotating and not finished
+  if (animating == true && rotationProgress < angleToRotate) {
+    dAngle = 0.02; // amount of rotation per frame
+    // make sure to rotate to the exact position
+    if (rotationProgress + dAngle > angleToRotate) {
+      dAngle = angleToRotate - rotationProgress;
+    }
+    // rotate each tetrahedron in the subPyraminx
+    for (pyrIndex of subPyraminx[indexToRotate].tetras) {
+      //rotate the tetrahedron along the axis defined by the normal and the point
+      tetrahedrons[pyrIndex].position.sub(subPyraminx[indexToRotate].point);
+      tetrahedrons[pyrIndex].rotateOnWorldAxis ( subPyraminx[indexToRotate].normal, dAngle );
+      tetrahedrons[pyrIndex].position.add(subPyraminx[indexToRotate].point);
+    }
+    // update rotation progress
+    rotationProgress += dAngle;
+      // if subPyraminx rotating and finished
+  } else if (animating == true && rotationProgress >= angleToRotate) {
+    animating = false;
+    // if subPyraminx not rotating, then allow input
+  } else {
+    // update the picking ray with the camera and mouse position
+  	raycaster.setFromCamera( mouse, camera );
+
+  	// calculate objects intersecting the picking ray
+  	var intersects = raycaster.intersectObjects( scene.children );
+    if (intersects.length > 0) {
+      // get object index in the tetrahedrons array, check if it belongs to a trigger tetrahedron
+      if (tetraTriggerIndex.includes(tetraToIndex.get(intersects[ 0 ].object))) {
+        tetraIndex = tetraToIndex.get(intersects[ 0 ].object);
+        // lower the intersected obj opacity
+        for (subPyrIndexList of subPyraminx) {
+          // iterate over subPyraminx, check if it contains the tetrahedron
+          if (subPyrIndexList.tetras.includes(tetraIndex)) {
+            // if yes, lower the opacity of all tetrahedrons in the subPyraminx
+            for (pyrIndex of subPyrIndexList.tetras) {
+              for (j = 0; j < 4; j++) {
+          		  tetrahedrons[pyrIndex].material[j].opacity = 0.5;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      tetraIndex = -1;
+      for (i = 0; i < 10; i++) {
+        for (j = 0; j < 4; j++) {
+          tetrahedrons[i].material[j].opacity = 1;
+        }
+      }
+    }
+}
 
 	requestAnimationFrame( animate );
 
