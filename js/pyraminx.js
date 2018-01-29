@@ -81,15 +81,15 @@ scene.add( ambientLight );
 
 // arrow helper
 //normalize the direction vector (convert to vector of length 1)
-var origin = new THREE.Vector3( 0, 0, 0 );
-var length = 2;
-var hex = 0xffff00;
-var arrowHelperX = new THREE.ArrowHelper( x, origin, length, 0xffff00 );
-var arrowHelperY = new THREE.ArrowHelper( y, origin, length, 0xff0000 );
-var arrowHelperZ = new THREE.ArrowHelper( z, origin, length, 0x0000ff );
-scene.add( arrowHelperX );
-scene.add( arrowHelperY );
-scene.add( arrowHelperZ );
+// var origin = new THREE.Vector3( 0, 0, 0 );
+// var length = 2;
+// var hex = 0xffff00;
+// var arrowHelperX = new THREE.ArrowHelper( x, origin, length, 0xffff00 );
+// var arrowHelperY = new THREE.ArrowHelper( y, origin, length, 0xff0000 );
+// var arrowHelperZ = new THREE.ArrowHelper( z, origin, length, 0x0000ff );
+// scene.add( arrowHelperX );
+// scene.add( arrowHelperY );
+// scene.add( arrowHelperZ );
 
 // to intersect objects
 var raycaster = new THREE.Raycaster();
@@ -129,7 +129,7 @@ var indexToRotate = 3;
 var animating = false;
 var rotationProgress = 0;
 
-var dAngle;
+var dAngle = 0.02; // amount of rotation per frame;
 var angleToRotate = Math.PI * 2 / 3; // amount to rotate subPyraminx per click
 var tetraTriggerIndex = [0, 2, 5, 9]; // the index of tetrahedrons that triggers subPyraminx rotation when clicked on
 var tetraIndex = -1; // intersected tetrahedron index in tetrahedrons array
@@ -192,29 +192,41 @@ window.addEventListener("click", function( event ) {
   }
 });
 
-// matrices for transformation in the rotation
-// todo: optimize
-var m2= new THREE.Matrix4();
-var m3= new THREE.Matrix4();
-var m4= new THREE.Matrix4();
+// generate matrices for transformation in the rotation
+function generateTransMatrix(indexToRotate, angle) {
+  var m2= new THREE.Matrix4();
+  var m3= new THREE.Matrix4();
+  var m4= new THREE.Matrix4();
+  //rotate the tetrahedron along the axis defined by the normal and the point
+  m2.makeRotationAxis ( subPyraminx[indexToRotate].normal, angle );
+  m3.makeTranslation ( -subPyraminx[indexToRotate].point.x, -subPyraminx[indexToRotate].point.y, -subPyraminx[indexToRotate].point.z );
+  m4.makeTranslation ( subPyraminx[indexToRotate].point.x, subPyraminx[indexToRotate].point.y, subPyraminx[indexToRotate].point.z );
+  m4.multiply(m2);
+  m4.multiply(m3);
+  return m4;
+}
+// calculate the transformation matrix for each subPyraminx with dAngle
+var transMatrix = [];
+for (i = 0; i < 4; i++) {
+  // usually rotates dAngle, store for convinience
+  transMatrix.push(generateTransMatrix(i, dAngle));
+}
+
 // render
 function animate() {
   // if subPyraminx rotating and not finished
   if (animating == true && rotationProgress < angleToRotate) {
-    dAngle = 0.02; // amount of rotation per frame
+    var transM; // either need to recalculate or use dAngle
     // make sure to rotate to the exact position
     if (rotationProgress + dAngle > angleToRotate) {
-      dAngle = angleToRotate - rotationProgress;
+      transM = generateTransMatrix(indexToRotate, angleToRotate - rotationProgress);
+    } else {
+      transM = transMatrix[indexToRotate];
     }
     // rotate each tetrahedron in the subPyraminx
     for (pyrIndex of subPyraminx[indexToRotate].tetras) {
-      //rotate the tetrahedron along the axis defined by the normal and the point
-      m2.makeRotationAxis ( subPyraminx[indexToRotate].normal, dAngle )
-      m3.makeTranslation ( -subPyraminx[indexToRotate].point.x, -subPyraminx[indexToRotate].point.y, -subPyraminx[indexToRotate].point.z )
-      m4.makeTranslation ( subPyraminx[indexToRotate].point.x, subPyraminx[indexToRotate].point.y, subPyraminx[indexToRotate].point.z )
-      tetrahedrons[positionToIndex.get(pyrIndex)].applyMatrix ( m3 );
-      tetrahedrons[positionToIndex.get(pyrIndex)].applyMatrix ( m2 );
-      tetrahedrons[positionToIndex.get(pyrIndex)].applyMatrix ( m4 );
+      // apply transformation
+      tetrahedrons[positionToIndex.get(pyrIndex)].applyMatrix ( transM);
     }
     // update rotation progress
     rotationProgress += dAngle;
@@ -245,6 +257,7 @@ function animate() {
           }
         }
       }
+      // not intersecting, restore all opacity
     } else {
       tetraIndex = -1;
       for (i = 0; i < 10; i++) {
