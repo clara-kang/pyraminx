@@ -4,7 +4,6 @@ var renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild( renderer.domElement );
 camera.position.set (2, 0, 9);
-// camera.rotateY(Math.PI * 1 / 8);
 
 // x, y ,z axis for convinience
 var x = new THREE.Vector3(1, 0, 0);
@@ -15,17 +14,13 @@ var z = new THREE.Vector3(0, 0, 1);
 var tetrahedrons = [];
 var tetraToIndex = new Map();
 
-// first tetrahedron
-// var geometry = new THREE.TetrahedronGeometry( 1, 0 );
+// first tetrahedron model
 var geometry = new THREE.TetrahedronGeometry( 1, 0 );
 
 // map different material to each face
 for (i = 0; i < 4; i++) {
   geometry.faces[ i ].materialIndex = i; // materialA
 }
-
-// create tetrahedron mesh
-// var tetrahedron = new THREE.Mesh( geometry, faceMaterial );
 
 function positionTetrahedron(tetrahedron) {
   // position it
@@ -40,7 +35,7 @@ function positionTetrahedron(tetrahedron) {
   tetrahedron.position.x += 2 / Math.sqrt(6);
 }
 
-// add the rest of tetrahedrons
+// add all the tetrahedrons
 var rowCnt = 3;
 var colCnt = 3;
 var levelCnt = 3;
@@ -104,16 +99,16 @@ function onMouseMove( event ) {
 
 window.addEventListener( 'mousemove', onMouseMove, false );
 
-function restaurelastIntersectObj(lastIntersectObj) {
-  if (lastIntersectObj != null) {
-    // not same intersected target, restore last intersected obj's opacity
-    for (j = 0; j < 4; j++) {
-      lastIntersectObj.material[j].opacity = 1;
-    }
-  }
-}
+// update window size on resize
+window.addEventListener("resize", function() {
+  var width = window.innerWidth;
+  var height =window.innerHeight;
 
-var lastIntersectObj = null;
+  renderer.setSize(width, height);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+})
+
 var normal1 = new THREE.Vector3(2 / Math.sqrt(6), 1 / 3, 2 / Math.sqrt(18)); // the one close to origin
 var normal2 = new THREE.Vector3(-2 / Math.sqrt(6), 1 / 3, 2 / Math.sqrt(18)); //the one on +x
 var normal3 = new THREE.Vector3(0, 1 / 3, -4 / Math.sqrt(18)); //the one on +z
@@ -182,16 +177,19 @@ window.addEventListener("click", function( event ) {
       break;
   }
     // restore opacity for rotation
-    for (i = 0; i < 10; i++) {
-      for (j = 0; j < 4; j++) {
-        tetrahedrons[i].material[j].opacity = 1;
-      }
-    }
+    restoreAllOpacity();
     animating = true;
     rotationProgress = 0;
   }
 });
 
+function restoreAllOpacity() {
+  for (i = 0; i < 10; i++) {
+    for (j = 0; j < 4; j++) {
+      tetrahedrons[i].material[j].opacity = 1;
+    }
+  }
+}
 // generate matrices for transformation in the rotation
 function generateTransMatrix(indexToRotate, angle) {
   var m2= new THREE.Matrix4();
@@ -212,6 +210,8 @@ for (i = 0; i < 4; i++) {
   transMatrix.push(generateTransMatrix(i, dAngle));
 }
 
+// the last intersected tetrahedron's index (position)
+var lastIntersectTetraIndex = -1;
 // render
 function animate() {
   // if subPyraminx rotating and not finished
@@ -240,18 +240,23 @@ function animate() {
 
   	// calculate objects intersecting the picking ray
   	var intersects = raycaster.intersectObjects( scene.children );
+    // if intersects
     if (intersects.length > 0) {
       // get object index in the tetrahedrons array, check if it belongs to a trigger tetrahedron
       if (tetraTriggerIndex.includes(tetraToIndex.get(intersects[ 0 ].object))) {
         tetraIndex = tetraToIndex.get(intersects[ 0 ].object);
-        // lower the intersected obj opacity
-        for (subPyrIndexList of subPyraminx) {
-          // iterate over subPyraminx, check if it contains the tetrahedron
-          if (subPyrIndexList.tetras.includes(tetraIndex)) {
-            // if yes, lower the opacity of all tetrahedrons in the subPyraminx
-            for (pyrIndex of subPyrIndexList.tetras) {
-              for (j = 0; j < 4; j++) {
-          		  tetrahedrons[positionToIndex.get(pyrIndex)].material[j].opacity = 0.5;
+        // only update the opacity if it's a different tetrahedron that is intersected
+        if (tetraIndex != lastIntersectTetraIndex) {
+          restoreAllOpacity();
+          // lower the intersected obj opacity
+          for (subPyrIndexList of subPyraminx) {
+            // iterate over subPyraminx, check if it contains the tetrahedron
+            if (subPyrIndexList.tetras.includes(tetraIndex)) {
+              // if yes, lower the opacity of all tetrahedrons in the subPyraminx
+              for (pyrIndex of subPyrIndexList.tetras) {
+                for (j = 0; j < 4; j++) {
+                  tetrahedrons[positionToIndex.get(pyrIndex)].material[j].opacity = 0.5;
+                }
               }
             }
           }
@@ -260,12 +265,10 @@ function animate() {
       // not intersecting, restore all opacity
     } else {
       tetraIndex = -1;
-      for (i = 0; i < 10; i++) {
-        for (j = 0; j < 4; j++) {
-          tetrahedrons[i].material[j].opacity = 1;
-        }
-      }
+      restoreAllOpacity();
     }
+    // update lastIntersectTetraIndex
+    lastIntersectTetraIndex = tetraIndex;
 }
 
 	requestAnimationFrame( animate );
